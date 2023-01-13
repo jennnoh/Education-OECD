@@ -1,7 +1,8 @@
 ---
 title: "Education Factors Affecting OECD Countries’ Economic Status"
-author: "Jenny Oh"
 date: "December 20, 2022"
+author: "Jenny Oh"
+output: github_document
 ---
 
 ```{r, include = F}
