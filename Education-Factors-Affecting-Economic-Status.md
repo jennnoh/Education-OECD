@@ -1,7 +1,7 @@
 Education Factors Affecting OECD Countries’ Economic Status
 ================
-Jenny Oh
-December 20, 2022
+Author: Jenny Oh \
+Date: December 20, 2022
 
 # Introduction
 
@@ -99,9 +99,9 @@ dataset. All variables, including the response variable, are numerical
 
 | Variable                                           | mean (s.d.) in training     | mean (s.d.) in test     |
 |----------------------------------------------------|-----------------------------|-------------------------|
-| Average wage                                       | 4.4173^{4} (1.6779^{4})     | 4.9906^{4} (1.2017^{4}) |
-| Education spending in early childhood education    | 1.845564^{4} (1.026137^{4}) | 2.231393^{4} (5333.11)  |
-| Education spending in tertiary childhood education | 1.166935^{4} (4660.12)      | 1.166203^{4} (6120.28)  |
+| Average wage                                       | 4.4173 x 10<sup>4</sup> (1.6779 x 10<sup>4</sup>)     | 4.9906 x 10<sup>4</sup> (1.2017x 10<sup>4</sup>) |
+| Education spending in early childhood education    | 1.845564 x 10<sup>4</sup> (1.026137 x 10<sup>4</sup>) | 2.231393 x 10<sup>4</sup> (5333.11)  |
+| Education spending in tertiary childhood education | 1.166935 x 10<sup>4</sup> (4660.12)      | 1.166203 x 10<sup>4</sup> (6120.28)  |
 | NEET rate                                          | 5.158 (2.784)               | 4.096 (2.737)           |
 | Population with tertiary education                 | 42.251 (7.921)              | 42.436 (8.878)          |
 | Secondary graduation rate                          | 81.949 (6.28)               | 77.555 (5.273)          |
@@ -201,7 +201,6 @@ model failed to be validated based on the results.
 | # of Cook’s D            | 1                       | 2                  |
 | # of DFFITS              | 1                       | 0                  |
 | Violations               | normality, independence | normality          |
-| —————                    | —————                   | —————              |
 | Intercept                | 336.72 ± 190.21         | 560.64 ± 2301.43   |
 | Early Education Spending | 1.99 ± 0.2 (\*)         | 0.37 ± 0.69        |
 | Tertiary Education       | 9.36 ± 4 (\*)           | 32.44 ± 34.67      |
