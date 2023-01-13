@@ -1,0 +1,565 @@
+---
+title: "Education Factors Affecting OECD Countries’ Economic Status"
+date: "December 20, 2022"
+author: "Jenny Oh"
+output: pdf_document
+---
+
+```{r, include = F}
+library(tidyverse)
+library(car)
+library(gridExtra)
+library(knitr)
+library(latex2exp)
+```
+
+# Introduction
+
+What education factors affect OECD countries’ economic status? More specifically, do education spending in early childhood and tertiary education, youth NEET rate, population with tertiary education, secondary and tertiary graduation rate and reading performance affect an OECD country’s average wage?  Education can influence various factors in society. As a university student who believes one of the main goals of education is to get a high-paying job, this motivated me to investigate whether education affects one’s economic status indeed. This can be an interesting topic to others since education is highly valued in most countries. It can give valuable insights to those who wonder how education can impact their lives.
+
+I referenced four research papers to choose the potential educational factors influencing wealth. The first article by Abdullah et al. (2013) investigates the relationship between education and income inequality and gives evidence to use the impact of primary and secondary schooling as educational factors affecting the average wage. However, the article focuses on countries in Africa thus the result might differ since the observations are mostly from the OECD countries. The second article by Hartog & Oosterbeek (1998) investigates family background as an educational factor that affects the average wage. Unlike this article, my research question only addresses wealth but not happiness. The third article by Andersson et al. (2018) showed how youth who are not in employment, education, or training (NEET) rate influences their income in the future. The last article by Martins & Veiga (2010) supports the relationship between parents’ education and their children’s PISA score. This article analyzes the relationship between PISA score and parental socioeconomic status whereas my research focused on the general relationship between education and income. 
+
+Based on the articles above, I included 7 predictors of education spending in early childhood and tertiary education, NEET rate, the rate of population with tertiary education, secondary and tertiary graduation rate, and PISA score to predict the average wage of a country.
+
+# Methods
+
+The dataset is from OECD data and seven variables were chosen to predict the average wage of a country by fitting a multiple linear regression model.
+
+First, the data were randomly divided into training and test data with a 7:3 ratio and EDA was conducted to understand the data briefly. Next, the first regression model was built with the seven variables in the training set. The assumptions of normality was checked by a QQ-plot and linearity, homoscedasticity, and uncorrelated error were checked with residuals/fitted and residuals/predicted plots. The additional conditions of linear regression were checked by residual plots. If there was a violation present, transformations were performed and the model was refitted based on the transformation to satisfy the assumptions.
+
+Then the model was reduced with the t-tests, partial F tests and multicollinearity. For the t-test, hypothesis tests were conducted for each estimated coefficient with the null hypothesis of a coefficient being zero. If the p-value of a test statistic was significant, the predictor was likely included in the model. Partial F tests were conducted to check which predictors could be dropped. If the p-value was not significant, the predictors were dropped and a new model was fitted with the predictors remaining. Last, multicollinearity was identified by the VIF (variance inflation factor) and a predictor with a high VIF was removed to avoid severe multicollinearity.
+
+With the new final model, model validation was performed by checking problematic points: leverage points, outliers and influential points. The leverage points were checked by points with high leverage; outliers by standardized residuals; and influential points by the cook’s distance, DFFITS, and DF BETAS. Finally, the final model was selected and compared with different models according to the following criteria: adjusted $R^2$, AIC, Corrected AIC, and BIC. 
+
+If there was no further modification needed, the model was validated in test data with summaries of coefficients, model assumptions and additional conditions, VIF, and the number of influential points, and comparing the properties to the fitted model with the training dataset. 
+
+The assumptions and the additional conditions of linear regression were assessed every time new reduced models were fitted and violated assumptions were mitigated by transformation. The problematic observations were discovered, and highly correlated predictors were removed based on the VIF. The assumption and multicollinearity violations were taken into account and discussed how they would impact the results.
+
+
+
+```{r, include=F}
+# Creating Training/Test Sets
+oecd <- read_csv("OECDedu.csv")
+
+set.seed(555)
+n <- nrow(oecd)
+training_indices <- sample(1:n, size = round(0.7*n))
+
+oecd_new <- oecd %>% rowid_to_column() # adds a new ID column called rowid
+
+# Create training dataset
+train <- oecd_new %>%  filter(rowid %in% training_indices)
+train <- train[,-2]
+
+# Testing dataset includes all observations NOT in the training data
+test <- oecd_new %>% filter(!(rowid %in% training_indices))
+test <- test[,-2]
+
+train %>% summarise(across(avg_wage:PISA, mean))
+test %>% summarise(across(avg_wage:PISA, mean))
+```
+
+
+```{r, include=FALSE}
+edu_model <- lm(avg_wage ~ edu_spend_try + edu_spend_early + NEET + ter_edu + 
+                  sec_grad + ter_grad + PISA, data = train)
+
+summary(edu_model)
+```
+
+```{r, include=F}
+# check condition 1
+fit_edu <- edu_model$fitted.values
+plot(train$avg_wage ~ fit_edu)
+abline(a=0, b=1)
+lines(lowess(train$avg_wage ~ fit_edu), lty = 2)
+```
+
+```{r, include=F}
+#check condition 2
+pairs(train[,4:10])
+```
+
+```{r, include = F}
+# Checking Assumptions
+par(mfrow=c(3,3))
+r <- edu_model$residuals
+plot(r ~ fit_edu, xlab="Fitted", ylab="Residuals")
+plot(r ~ train$edu_spend_try, xlab="Try Edu Spend", ylab="Residuals")
+plot(r ~ train$edu_spend_early, xlab="Early Edu Spend", ylab="Residuals")
+plot(r ~ train$NEET, xlab="NEET Score", ylab="Residuals")
+plot(r ~ train$ter_edu, xlab="Ter Edu Rate", ylab="Residuals")
+plot(r ~ train$sec_grad, xlab="Sec Edu Rate", ylab="Residuals")
+plot(r ~ train$ter_grad, xlab="Ter Grad Rate", ylab="Residuals")
+plot(r ~ train$PISA, xlab="PISA Score", ylab="Residuals")
+
+qqnorm(r)
+qqline(r)
+```
+
+```{r, include = F}
+# this transforms all X and Y simultaneously
+# summary(powerTransform(cbind(train[,3:10])))
+
+# consider only transformation on X
+summary(powerTransform(cbind(train[,4:10])))
+
+# only to transform y (box cox)
+boxCox(edu_model)
+```
+
+```{r, include = F}
+train$sqrt_avg_wage <- sqrt(train$avg_wage)
+train$sqrt_edu_spend_try <- sqrt(train$edu_spend_try)
+train$sqrt_edu_spend_early <- sqrt(train$edu_spend_early)
+train$sqrt_NEET <- sqrt(train$NEET)
+train$sqrt_ter_edu <- sqrt(train$ter_edu)
+train$sqrt_sec_grad <- sqrt(train$sec_grad)
+train$sqrt_ter_grad <- sqrt(train$ter_grad)
+train$sqrt_PISA <- sqrt(train$PISA)
+```
+
+```{r, include = F}
+test$sqrt_avg_wage <- sqrt(test$avg_wage)
+test$sqrt_edu_spend_try <- sqrt(test$edu_spend_try)
+test$sqrt_edu_spend_early <- sqrt(test$edu_spend_early)
+test$sqrt_NEET <- sqrt(test$NEET)
+test$sqrt_ter_edu <- sqrt(test$ter_edu)
+test$sqrt_sec_grad <- sqrt(test$sec_grad)
+test$sqrt_ter_grad <- sqrt(test$ter_grad)
+test$sqrt_PISA <- sqrt(test$PISA)
+```
+
+
+```{r, include = F}
+model_transformed <- lm(sqrt_avg_wage ~ sqrt_edu_spend_try + sqrt_edu_spend_early + sqrt_NEET + sqrt_ter_edu + 
+                         sqrt_sec_grad + sqrt_ter_grad + sqrt_PISA, data = train)
+summary(model_transformed)
+```
+```{r, include = F}
+# re-check all the conditions and assumptions
+# check condition 1
+fit_transformed <- model_transformed$fitted.values
+plot(train$sqrt_avg_wage ~ fit_transformed)
+abline(a=0, b =1)
+lines(lowess(train$sqrt_avg_wage ~ fit_transformed), lty=2)
+```
+```{r, include = F}
+# check condition 2
+pairs(train[,12:18])
+```
+
+```{r, include = F}
+# Checking Assumptions
+par(mfrow=c(3,3))
+r_t<- model_transformed$residuals
+plot(r_t ~ fit_transformed, xlab="Fitted", ylab="Residuals")
+plot(r_t ~ train$sqrt_edu_spend_try, xlab="sqrt(Try Edu Spend)", ylab="Residuals")
+plot(r_t ~ train$sqrt_edu_spend_early, xlab="sqrt(Early Edu Spend)", ylab="Residuals")
+plot(r_t ~ train$sqrt_NEET, xlab="sqrt(NEET Score)", ylab="Residuals")
+plot(r_t ~ train$sqrt_ter_edu, xlab="sqrt(Ter Edu Rate)", ylab="Residuals")
+plot(r_t ~ train$sqrt_sec_grad, xlab="sqrt(Sec Edu Rate)", ylab="Residuals")
+plot(r_t ~ train$sqrt_ter_grad, xlab="sqrt(Ter Grad Rate)", ylab="Residuals")
+plot(r_t ~ train$sqrt_PISA, xlab="sqrt(PISA Score)", ylab="Residuals")
+
+qqnorm(r_t)
+qqline(r_t)
+```
+
+```{r, include = F}
+summary(model_transformed)
+```
+
+
+
+```{r, include = F}
+## ANOVA
+summary(model_transformed)$r.squared
+```
+
+
+
+```{r, include = F}
+anova(model_transformed)
+```
+
+
+
+
+
+```{r, include=F}
+# Partial F Tests and Creating a documented decision flow
+model_reduced1 <- lm(sqrt_avg_wage ~ sqrt_edu_spend_try + sqrt_edu_spend_early + sqrt_NEET + sqrt_ter_edu + 
+                       sqrt_ter_grad + sqrt_PISA, data = train)
+anova(model_reduced1, model_transformed)
+summary(model_reduced1)
+```
+```{r, include=F}
+model_reduced2 <- lm(sqrt_avg_wage ~ sqrt_edu_spend_try + sqrt_edu_spend_early + sqrt_ter_edu +  
+                       sqrt_ter_grad + sqrt_PISA, data = train)
+anova(model_reduced2, model_transformed)
+summary(model_reduced2)
+```
+
+```{r, include=F}
+model_reduced3 <- lm(sqrt_avg_wage ~ sqrt_edu_spend_try + sqrt_edu_spend_early +  
+                       sqrt_ter_grad + sqrt_PISA, data = train)
+anova(model_reduced3, model_transformed)
+summary(model_reduced3)
+```
+
+
+```{r, include=F}
+model_reduced4 <- lm(sqrt_avg_wage ~ sqrt_edu_spend_early +  
+                       sqrt_ter_grad + sqrt_PISA, data = train)
+anova(model_reduced4, model_transformed)
+summary(model_reduced4)
+```
+
+```{r, include=F}
+model_reduced5 <- lm(sqrt_avg_wage ~ sqrt_edu_spend_try + sqrt_edu_spend_early + sqrt_NEET + sqrt_ter_edu + 
+                       sqrt_ter_grad, data = train)
+anova(model_reduced5, model_transformed)
+summary(model_reduced5)
+```
+
+
+
+
+
+```{r, include=F}
+# Checking assumptions again
+r_r <- model_reduced3$residuals
+fit_reduced <- model_reduced3$fitted.values
+
+par(mfrow=c(3, 2))
+
+plot(r_r ~ fit_reduced, xlab="Fitted", ylab="Residuals")
+
+plot(r_r ~ train$sqrt_edu_spend_try, xlab="sqrt(Try Edu Spend)", ylab="Residuals")
+plot(r_r ~ train$sqrt_edu_spend_early, xlab="sqrt( Edu Spend)", ylab="Residuals")
+plot(r_r ~ train$sqrt_ter_grad, xlab="sqrt(Ter Grad Rate)", ylab="Residuals")
+plot(r_r ~ train$sqrt_PISA, xlab="sqrt(PISA Score)", ylab="Residuals")
+
+qqnorm(r_r)
+qqline(r_r)
+```
+
+
+
+```{r, include=F}
+# Validation Process
+mtr <- apply(train[,-c(1, 2)], 2, mean)
+sdtr <- apply(train[,-c(1, 2)], 2, sd)
+
+mtest <- apply(test[,-c(1, 2)], 2, mean)
+sdtest <- apply(test[,-c(1, 2)], 2, sd)
+```
+
+# Results
+
+The dataset is from OECD data and seven variables were chosen to predict the average wage of a country. Each country acts as an observation and the variable in interest is average income. After removing all rows with N/A values, there are 18 observations and 7 variables in the final dataset. All variables, including the response variable, are numerical (Table 1). 
+
+Variable | mean (s.d.) in training | mean (s.d.) in test
+---------|-------------------------|--------------------
+Average wage | `r round(mtr[1])` (`r round(sdtr[1])`) | `r round(mtest[1])` (`r round(sdtest[1])`)
+Education spending in early childhood education | `r round(mtr[2],2)` (`r round(sdtr[2],2)`) | `r round(mtest[2],2)` (`r round(sdtest[2],2)`)
+Education spending in tertiary childhood education | `r round(mtr[3],2)` (`r round(sdtr[3],2)`) | `r round(mtest[3],2)` (`r round(sdtest[3],2)`)
+NEET rate | `r round(mtr[4],3)` (`r round(sdtr[4],3)`) | `r round(mtest[4],3)` (`r round(sdtest[4],3)`)
+Population with tertiary education | `r round(mtr[5],3)` (`r round(sdtr[5],3)`) | `r round(mtest[5],3)` (`r round(sdtest[5],3)`)
+Secondary graduation rate| `r round(mtr[6],3)` (`r round(sdtr[6],3)`) | `r round(mtest[6],3)` (`r round(sdtest[6],3)`)
+Tertiary graduation rate | `r round(mtr[7],3)` (`r round(sdtr[7],3)`) | `r round(mtest[7],3)` (`r round(sdtest[7],3)`)
+PISA score | `r round(mtr[8],3)` (`r round(sdtr[8],3)`) | `r round(mtest[8],3)` (`r round(sdtest[8],3)`)
+
+Table: Summary statistics in training and test dataset
+
+When checking the assumptions, normality and uncorrelated error seemed to be violated since there were clusters separated from the rest for tertiary education spending and secondary education rate variables and the values were not aligned in the QQ-plot. Therefore, the data was transformed based on the result from power transformations and the predictor and response variables were transformed by square root. The newly fitted model reasonably satisfied the conditions and assumptions with $R^2$ = 0.950 although normality was still slightly violated. 
+
+According to the t-tests and partial F-tests, a new linear model was fitted with predictors of education spent on tertiary and early education, tertiary graduation rate and the PISA score. So the model ended up involving only four predictors with the $R^2$ = 0.948 indicating that only a little information was lost by removing these predictors.
+
+However, there was severe multicollinearity present for two predictors in the reduced model. Therefore, the model was refitted without tertiary education spent (VIF = 6.292) as it seemed highly related to the tertiary graduation rate (VIF = 3.533). The resulting model was free from severe multicollinearity and had a comparable R-squared ($R^2$ = 0.919) value to the initial full and the reduced model.
+
+
+```{r, include = F}
+# Identifying multicollinearity 
+vif(model_reduced3)
+```
+
+
+```{r, include = F}
+model_multi <-lm(sqrt_avg_wage ~ sqrt_edu_spend_early +  
+                       sqrt_ter_grad + sqrt_PISA, data = train)
+vif(model_multi)
+summary(model_multi)$r.squared
+```
+
+
+
+```{r, include = F}
+r_m <- model_multi$residuals
+fit_reduced <- model_multi$fitted.values
+
+par(mfrow=c(3, 2))
+
+plot(r_m ~ fit_reduced, xlab="Fitted", ylab="Residuals")
+
+plot(r_m ~ train$sqrt_edu_spend_try, xlab="sqrt(Try Edu Spend)", ylab="Residuals")
+plot(r_m ~ train$sqrt_edu_spend_early, xlab="sqrt( Edu Spend)", ylab="Residuals")
+plot(r_m ~ train$sqrt_ter_grad, xlab="sqrt(Ter Grad Rate)", ylab="Residuals")
+plot(r_m ~ train$sqrt_PISA, xlab="sqrt(PISA Score)", ylab="Residuals")
+
+qqnorm(r_m)
+qqline(r_m)
+```
+
+
+```{r, fig.width=8, fig.height=6.5, include = F}
+# Problematic Observations
+par(mfrow=c(4,3))
+for(i in 12:18){
+  boxplot(train[,i], main=paste0("Boxplot of ", names(train)[i]), xlab=names(train)[i]
+          , horizontal=T)
+}
+```
+
+```{r, include = F}
+# values to use in cutoffs
+n <- nrow(train)
+p <- length(coef(model_multi)) -1
+
+# define the cutoffs we will use
+Hcut <- 2*((p+1)/n)
+DFFITScut <- 2*sqrt((p+1)/n)
+DFBETAcut <- 2/sqrt(n)
+Dcut <- qf(0.5, p+1, n-p-1)
+
+# identify the leverage points
+h <- hatvalues(model_multi)
+which(h>Hcut)
+```
+
+```{r, include=F}
+# identify the outliers
+r_out <- rstandard(model_multi)
+which(r_out < -2 | r_out > 2)
+which(r_out < -4 | r_out > 4)
+```
+
+```{r, include = F}
+# identify influential points by Cook's distance
+D <- cooks.distance(model_multi)
+which(D>Dcut)
+```
+
+```{r, include = F}
+# identify influential points by DFFITs
+fits<- dffits(model_multi)
+which(abs(fits) > DFFITScut)
+```
+
+```{r, include = F}
+# identify influential points by DFBETAs
+betas <- dfbetas(model_multi)
+dim(betas)
+```
+
+```{r, include = F}
+for (i in 1:4){
+  print(paste0("Beta ", i-1))
+  print(which(abs(betas[,i]) > DFBETAcut))
+}
+```
+
+```{r, include = F}
+# Using Goodness Measures to Pick a Preferred Model
+summary(model_multi)$adj.r.squared
+```
+
+```{r, include = F}
+AIC(model_multi, model_reduced3, edu_model)
+```
+
+```{r, include = F}
+BIC(model_multi, model_reduced3, edu_model)
+```
+
+```{r, include = F}
+select = function(model, n)
+{
+  SSres <- sum(model$residuals^2)
+  Rsq <- summary(model)$r.squared
+  Rsq_adj <- summary(model)$adj.r.squared
+  p <- length(model$coefficients)-1
+  AIC <- n*log(SSres/n) + 2*p
+  AICc <- AIC + (2*(p+2)*(p+3)/(n-p-1))
+  BIC <- n*log(SSres/n)+(p+2)*log(n)
+  res <- c(SSres, Rsq, Rsq_adj, AIC, AICc, BIC)
+  names(res) <- c("SSres", "Rsq", "Rsq_adj", "AIC", "AIC_c", "BIC")
+  return(res)
+}
+
+s1 <- select(edu_model, nrow(train))
+s3 <- select(model_reduced3, nrow(train))
+s5 <- select(model_multi, nrow(train))
+```
+
+The goodness of the final model was assessed by the following criteria: adjusted $R^2$, AIC, Corrected AIC, and BIC. It was found that both of the reduced models explain the data better than the first model with seven predictors (Table 2). Although the reduced model with 4 predictors has a slightly smaller AIC, corrected AIC, BIC value and greater adjusted $R^2$ than the final model, multicollinearity was present and thus cannot be used as the final model. Therefore, the best-fitting model was concluded to be the final reduced model.
+
+Model | Adjusted $R^2$ | AIC | Corrected AIC | BIC
+------|----------------|-----|---------|-----
+Full model | `r round(s1[3], 2)` | `r round(s1[4],2)`| `r round(s1[5],2)`  | `r round(s1[6], 2)`
+Reduced model with 4 predictors| `r round(s3[3], 2)` | `r round(s3[4], 2)` | `r round(s3[5],2)`| `r round(s3[6], 2)`
+Final reduced model with 3 predictors | `r round(s5[3], 2)` | `r round(s5[4], 2)` | `r round(s5[5],2)`|`r round(s5[6],2)`
+
+Table: Summary of goodness measures for models fit to square root of average wage. The variables that were included in the final reduced model were square roots of average wage, education spending in early childhood,tertiary graduation rate and reading performance PISA score. 
+
+Moreover,  influential and problematic points, violated assumptions, and the presence of complicated transformations were used to validate the final model. For the problematic points, one leverage point was identified as distant from the rest of the observations in the predictor space. There was one outlier identified when considering the dataset as small. There was one observation that was identified as being influential on the entire regression surface, one observation that influenced their own fitted values and between 0-2 observations being influential on at least one estimated coefficient. The model assumptions and the additional conditions were reasonably satisfied although the normality appears to be still slightly violated (Appendix 1 & 2). The model only used a non-complicated transformation of root-square.
+
+- **Plot 1**: Verifying the Model Assumptions of the Training Model. Residuals vs. Fitted plots and Residuals vs. Predictor plots for constant variance and independence, and normal QQ-plot for normality.  \bigskip
+
+```{r, echo=F, fig.dim=c(8,5)}
+r_f <- model_multi$residuals
+fit_multi <- model_multi$fitted.values
+
+par(mfrow=c(3, 2))
+
+plot(r_f ~ fit_multi, xlab="Fitted", ylab="Residuals", main = "Residuals vs. Fitted")
+
+plot(r_f ~ train$sqrt_edu_spend_early, xlab=TeX(r'($\sqrt{Early Education Spending}$)'), ylab="Residuals", main="Residuals vs. Early Education Spending")
+plot(r_f ~ train$sqrt_ter_grad, xlab=TeX(r'($\sqrt{Tertiary Graduation Rate}$)'), ylab="Residuals", main="Residuals vs. Early Education Spending")
+plot(r_f ~ train$sqrt_PISA, xlab=TeX(r'($\sqrt{PISA Score}$)'), ylab="Residuals", main="Residuals vs.PISA Score")
+
+qqnorm(r_f)
+qqline(r_f)
+```
+
+```{r, include=F}
+# for temp1, code everything but don't display
+# first with training then with test set
+p1 <- length(coef(model_multi))-1
+n1 <- nrow(train)
+vif1 <- max(vif(model_multi))
+D1 <- length(which(cooks.distance(model_multi) > qf(0.5, p1+1, n1-p1-1)))
+fits1 <- length(which(abs(dffits(model_multi)) > 2*sqrt((p1+1)/n1)))
+
+coefs1 <- round(summary(model_multi)$coefficients[,1], 3)
+ses1 <- round(summary(model_multi)$coefficients[,2], 3)
+
+# fit in test dataset
+model_multi_test <- lm(sqrt_avg_wage ~ sqrt_edu_spend_early + sqrt_ter_grad + sqrt_PISA, data = test)
+
+tp1 <- length(coef(model_multi_test))-1
+tn1 <- nrow(test)
+tvif1 <- max(vif(model_multi_test))
+tD1 <- length(which(cooks.distance(model_multi_test) > qf(0.5, tp1+1, tn1-tp1-1)))
+tfits1 <- length(which(abs(dffits(model_multi_test)) > 2*sqrt((tp1+1)/tn1)))
+
+tcoefs1 <- round(summary(model_multi_test)$coefficients[,1], 3)
+tses1 <- round(summary(model_multi_test)$coefficients[,2], 3)
+```
+
+
+```{r, include = F}
+# for temp1, check everything but don't output
+# first with training then with test set
+
+pairs(train[,c(13, 17, 18)])
+plot(train$sqrt_avg_wage ~ fitted(model_multi), main="Y vs Fitted", xlab="Fitted", ylab="Average wage")
+lines(lowess(train$sqrt_avg_wage ~ fitted(model_multi)), lty=2)
+abline(a = 0, b = 1)
+```
+
+
+
+```{r, include = F}
+pairs(test[,c(13, 17, 18)])
+plot(test$sqrt_avg_wage ~ fitted(model_multi_test), main="Y vs Fitted", xlab="Fitted", ylab="Average wage")
+lines(lowess(test$sqrt_avg_wage ~ fitted(model_multi_test)), lty=2)
+abline(a = 0, b = 1)
+```
+
+- **Plot 2**: Verifying the Model Assumptions of the Test Model. Residuals vs. Fitted plots and Residuals vs. Predictor plots for constant variance and independence, and normal QQ-plot for normality. Normality seems to be slightly violated here as well.
+
+```{r, echo=F, fig.dim=c(8,5)}
+r_f_test <- model_multi_test$residuals
+fit_multi_test <- model_multi_test$fitted.values
+
+par(mfrow=c(3, 2))
+
+plot(r_f_test ~ fit_multi_test, xlab="Fitted", ylab="Residuals", main = "Residuals vs. Fitted")
+
+plot(r_f_test ~ test$sqrt_edu_spend_early, xlab=TeX(r'($\sqrt{Early Education Spending}$)'), ylab="Residuals", main="Residuals vs. Early Education Spending")
+plot(r_f_test ~ test$sqrt_ter_grad, xlab=TeX(r'($\sqrt{Tertiary Graduation Rate}$)'), ylab="Residuals", main="Residuals vs. Tertiary Graduation Rate")
+plot(r_f_test ~ test$sqrt_PISA, xlab=TeX(r'($\sqrt{PISA Score}$)'), ylab="Residuals", main="Residuals vs. PISA Score")
+
+qqnorm(r_f_test)
+qqline(r_f_test)
+```
+
+\bigskip 
+For validation, the final model was compared to the test dataset with estimated regression coefficients, significant predictors, model violations, adjusted $R^2$, problematic observations and the presence of multicollinearity. While both models had similar largest VIF values, the numbers of problematic observations seem to be different (Table 3). Moreover, normality of both models seems to be slightly violated while the other assumptions and the additional conditions were reasonably satisfied (Plot 1 & 2). The coefficient for the intercept and the predictors were significantly different between the two models. While all predictors in the trained model were fairly significant, none of the coefficients in the test model were significant. Therefore, the model failed to be validated based on the results.
+
+\newpage
+
+Characteristic | Final Model (Train) | Final Model (Test)
+---------------|----------------|---------------
+Largest VIF value | `r round(vif1, 3)` | `r round(tvif1, 3)` 
+\# of Cook's D | `r D1` | `r tD1` 
+\# of DFFITS | `r fits1` | `r tfits1` 
+Violations | normality, independence | normality
+---------------|---------------|---------------
+Intercept | `r round(coefs1[1], 2)` $\pm$ `r round(ses1[1], 2)` | `r round(tcoefs1[1], 2)` $\pm$ `r round(tses1[1],2)`  
+Early Education Spending  | `r round(coefs1[2],2)` $\pm$ `r round(ses1[2], 2)` (\*) |`r round(tcoefs1[2], 2)` $\pm$ `r round(tses1[2], 2)` 
+Tertiary Education | `r round(coefs1[3], 2)` $\pm$ `r round(ses1[3], 2)` (\*)|`r round(tcoefs1[3], 2)` $\pm$ `r round(tses1[3], 2)` 
+PISA Score | `r round(coefs1[4], 2)` $\pm$ `r round(ses1[4], 2)`(\.)| `r round(tcoefs1[4], 2)` $\pm$ `r round(tses1[4], 2)`
+
+Table: Summary of characteristics of the final model in the training and test datasets. The final uses 'early education spending', 'tertiary education rate', and 'PISA score' as predictors and the response is square root of average wage. Coefficients are presented as estimate $\pm$ SE (\* = significant t-test at $\alpha = 0.05$ and \. = significant t-test at $\alpha = 0.1$).
+
+```{r, include = F}
+summary(model_multi)
+summary(model_multi_test)
+```
+
+# Discussion
+
+The final model fitted with the training data indicates that early education spending ($\beta_1$ = 1.99), tertiary education rate ($\beta_2$ = 9.36), and PISA score ($\beta_3$ = -17.85) were linearly associated with the average income of a country. In contrast, the final model fitted with the test data had significantly different coefficients (Table 3).  The coefficients can be interpreted as the average income of a country is expected to increase by 1.99 in the training model and 0.37 in the test model for one unit increase in early education spending when the other predictors are held fixed. Therefore, the results answer the research question by showing that out of the seven potential predictors, early education spending, tertiary education rate and the PISA score affect OECD countries’ economic status. However, since the model failed to be validated, the interpretation is likely to be flawed. 
+
+There are several limitations to this analysis. First, the assumptions of normality based on the QQ-plot were unable to be perfectly remedied through transformations since there was no simple transformation that fixes the violation. The lack of normality means that p-values for our hypothesis tests could not be reliable. Therefore, it is possible that the model-building process based on hypothesis tests was flawed and could have resulted in a different model. Moreover, there was a small number of observations of 18 in the dataset and it led to the significant differences between the coefficients and their significance between the train and the test model. Due to the nature of limited observations in data, there was not much variation present. It was not allowed to go back and randomly select another training and test dataset since the model was already fitted. Since there were influential observations for both models, the coefficients might have been impacted by them as well.
+
+\newpage
+
+# Bibliography
+
+Abdullah, A., Doucouliagos, H., &amp; Manning, E. (2013). Does education reduce income inequality? A meta-regression analysis. Journal of Economic Surveys, 29(2), 301–316. https://doi.org/10.1111/joes.12056 
+
+Andersson, F. W., Gullberg Brännstrom, S., &amp; Mörtvik, R. (2018). Long-term scarring effect of neither working nor studying. International Journal of Manpower, 39(2), 190–204. https://doi.org/10.1108/ijm-12-2015-0226 
+
+Hartog, J., &amp; Oosterbeek, H. (1998). Health, wealth and happiness: Why pursue a higher education? Economics of Education Review, 17(3), 245–256. https://doi.org/10.1016/s0272-7757(97)00064-2 
+
+Martins, L., &amp; Veiga, P. (2010). Do inequalities in parents’ education play an important role in Pisa students’ mathematics achievement test score disparities? Economics of Education Review, 29(6), 1016–1033. https://doi.org/10.1016/j.econedurev.2010.05.001 
+
+OECD. (2022). Earnings and wages - average wages - OECD data. theOECD. Retrieved December 19, 2022, from https://data.oecd.org/earnwage/average-wages.htm 
+
+OECD. (2022). Education at a glance. OECD iLibrary. Retrieved December 19, 2022, from https://www.oecd-ilibrary.org/education/education-at-a-glance_19991487 
+
+OECD. (2022). OECD Employment Outlook 2022. OECD Employment Outlook. https://doi.org/10.1787/1bb305a6-en
+
+OECD. (2022). Pisa. Digital Object Identifier System. Retrieved December 19, 2022, from https://doi.org/10.1787/19963777 
+
+\newpage
+# Appendix
+
+**1.**
+
+```{r, echo = F, fig.dim=c(4,4)}
+pairs(train[,c(13, 17, 18)])
+```
+
+**2.**
+
+```{r, echo = F, fig.dim=c(4,4)}
+plot(train$sqrt_avg_wage ~ fitted(model_multi), main="Y vs Fitted", xlab="Fitted", ylab="Average wage")
+lines(lowess(train$sqrt_avg_wage ~ fitted(model_multi)), lty=2)
+abline(a = 0, b = 1)
+```
+
